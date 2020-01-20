@@ -53,7 +53,8 @@ fpnew:
 jtag_pulp:
   commit: v0.1
 riscv:
-  commit: pulpissimo-v3.4.0
+  commit: CLINTv2
+  group: abettati
 ibex:
   commit: 13313952cd50ff04489f6cf3dba9ba05c2011a8b
   group: lowRISC
