@@ -222,8 +222,13 @@ module fc_subsystem #(
         .apu_master_result_i   ( '0                ),
         .apu_master_flags_i    ( '0                ),
 
-        .irq_i                 ( core_irq_req      ),
-        .irq_id_i              ( core_irq_id       ),
+        // TODO
+        .irq_software_i        (),
+        .irq_timer_i           (),
+        .irq_external_i        (),
+        .irq_fast_i            (),
+        .irq_nmi_i             (),
+        .irq_fastx_i           (),
         .irq_ack_o             ( core_irq_ack      ),
         .irq_id_o              ( core_irq_ack_id   ),
         .irq_sec_i             ( 1'b0              ),
