@@ -357,7 +357,7 @@ module fc_subsystem #(
         always_comb begin : gen_core_irq_fastx
             core_irq_fastx = '0;
             if (core_irq_req) begin
-                begin case (core_irq_id)
+                case (core_irq_id)
                     // std irq events                 // FC EVENTS
                     5'd10: core_irq_fastx[16] = 1'b1; // s_timer_lo_event
                     5'd11: core_irq_fastx[17] = 1'b1; // s_timer_hi_event
