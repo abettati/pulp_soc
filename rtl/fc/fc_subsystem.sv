@@ -57,14 +57,15 @@ module fc_subsystem #(
     localparam IBEX_RV32E = CORE_TYPE == 2;
 
     // Interrupt signals
-    logic        core_irq_req   ;
-    logic        core_irq_sec   ;
-    logic [4:0]  core_irq_id    ;
-    logic [4:0]  core_irq_ack_id;
-    logic        core_irq_ack   ;
-    logic [14:0] core_irq_fast  ;
-
-    logic [3:0]  irq_ack_id;
+    logic        core_irq_req         ;
+    logic        core_irq_sec         ;
+    logic [4:0]  core_irq_id          ;
+    logic [4:0]  core_irq_ack_id      ;
+    logic [4:0]  core_irq_ack_id_RI5CY; // RI5CY irq_id_o
+    logic        core_irq_ack         ;
+    logic [14:0] core_irq_fast        ;
+    logic [31:0] core_irq_fastx       ;
+    logic [3:0]  irq_ack_id           ; // ibex irq_id_o
 
     // Boot address, core id, cluster id, fethc enable and core_status
     logic [31:0] boot_addr        ;
@@ -223,16 +224,16 @@ module fc_subsystem #(
         .apu_master_flags_i    ( '0                ),
 
         // TODO
-        .irq_software_i        (),
-        .irq_timer_i           (),
-        .irq_external_i        (),
-        .irq_fast_i            (),
-        .irq_nmi_i             (),
-        .irq_fastx_i           (),
-        .irq_ack_o             ( core_irq_ack      ),
-        .irq_id_o              ( core_irq_ack_id   ),
-        .irq_sec_i             ( 1'b0              ),
-        .sec_lvl_o             (                   ),
+        .irq_software_i        ( 1'b0                  ),
+        .irq_timer_i           ( 1'b0                  ),
+        .irq_external_i        ( 1'b0                  ),
+        .irq_fast_i            ( core_irq_fast         ),
+        .irq_nmi_i             ( 1'b0                  ),
+        .irq_fastx_i           ( core_irq_fastx        ),
+        .irq_ack_o             ( core_irq_ack          ),
+        .irq_id_o              ( core_irq_ack_id_RI5CY ),
+        .irq_sec_i             ( 1'b0                  ),
+        .sec_lvl_o             (                       ),
 
         .debug_req_i           ( debug_req_i       ),
 
@@ -305,29 +306,119 @@ module fc_subsystem #(
     assign supervisor_mode_o = 1'b1;
 
     generate
-    if ( USE_IBEX == 1) begin : convert_irqs
-    // Ibex supports 15 fast interrupts and reads the interrupt lines directly
-    // Convert ID back to interrupt lines
-    always_comb begin : gen_core_irq_fast
-        core_irq_fast = '0;
-        if (core_irq_req && (core_irq_id == 26)) begin
-            // remap SoC Event FIFO
-            core_irq_fast[10] = 1'b1;
-        end else if (core_irq_req && (core_irq_id < 15)) begin
-            core_irq_fast[core_irq_id] = 1'b1;
+    // Remap ack ID for SoC Event FIFO
+    // needed for IBEX only since RI5CY does not use hardware ack
+    // for std interrupts and theres no need for remap in fastx
+    if ( USE_IBEX == 1) begin
+        always_comb begin : gen_core_irq_ack_id
+            if (irq_ack_id == 10) begin
+                core_irq_ack_id = 26;
+            end else begin
+                core_irq_ack_id = {1'b0, irq_ack_id};
+            end
+        end
+
+        // Convert ID to std interrupt lines
+        always_comb begin : gen_core_irq_fast
+            core_irq_fast = '0;
+            if (core_irq_req && (core_irq_id == 26)) begin
+                // remap SoC Event FIFO
+                core_irq_fast[10] = 1'b1;
+            end else if (core_irq_req && (core_irq_id < 15)) begin
+                core_irq_fast[core_irq_id] = 1'b1;
+            end
+        end
+    end
+    // Convert ID to fastx interrupt lines (RI5CY only)
+    if ( USE_IBEX == 0) begin
+        always_comb begin : gen_core_irq_fast_std
+            core_irq_fast = '0;
+            if (core_irq_req) begin
+                case (core_irq_id)
+                    // std irq events                 // FC EVENTS
+                    5'd10: core_irq_fast[0] =  1'b1; // s_timer_lo_event
+                    5'd11: core_irq_fast[1] =  1'b1; // s_timer_hi_event
+                    5'd14: core_irq_fast[2] =  1'b1; // s_ref_rise/fall_event
+                    5'd15: core_irq_fast[3] =  1'b1; // s_gpio_event
+                    5'd17: core_irq_fast[4] =  1'b1; // s_adv_timer_events[0]
+                    5'd18: core_irq_fast[5] =  1'b1; // s_adv_timer_events[1]
+                    5'd19: core_irq_fast[6] =  1'b1; // s_adv_timer_events[2]
+                    5'd20: core_irq_fast[7] =  1'b1; // s_adv_timer_events[4]
+                    5'd26: core_irq_fast[10] = 1'b1; // SoC FIFO event
+                    5'd29: core_irq_fast[11] = 1'b1; // s_fc_err_events
+                    5'd30: core_irq_fast[12] = 1'b1; // s_fc_hp_events[0]
+                    5'd31: core_irq_fast[13] = 1'b1; // s_fc_hp_events[1]
+
+                    default : core_irq_fast = 15'b0;
+                endcase
+            end
+        end
+
+        always_comb begin : gen_core_irq_fastx
+            core_irq_fastx = '0;
+            if (core_irq_req) begin
+                begin case (core_irq_id)
+                    // std irq events                 // FC EVENTS
+                    5'd10: core_irq_fastx[16] = 1'b1; // s_timer_lo_event
+                    5'd11: core_irq_fastx[17] = 1'b1; // s_timer_hi_event
+                    5'd14: core_irq_fastx[18] = 1'b1; // s_ref_rise/fall_event
+                    5'd15: core_irq_fastx[19] = 1'b1; // s_gpio_event
+                    5'd17: core_irq_fastx[20] = 1'b1; // s_adv_timer_events[0]
+                    5'd18: core_irq_fastx[21] = 1'b1; // s_adv_timer_events[1]
+                    5'd19: core_irq_fastx[22] = 1'b1; // s_adv_timer_events[2]
+                    5'd20: core_irq_fastx[23] = 1'b1; // s_adv_timer_events[4]
+                    5'd26: core_irq_fastx[26] = 1'b1; // SoC FIFO event
+                    5'd29: core_irq_fastx[27] = 1'b1; // s_fc_err_events
+                    5'd30: core_irq_fastx[28] = 1'b1; // s_fc_hp_events[0]
+                    5'd31: core_irq_fastx[29] = 1'b1; // s_fc_hp_events[1]
+                    // irq x specific events
+                    5'd0:  core_irq_fastx[0] = 1'b1; // software event 0
+                    5'd1:  core_irq_fastx[1] = 1'b1; // software event 1
+                    5'd2:  core_irq_fastx[2] = 1'b1; // software event 2
+                    5'd3:  core_irq_fastx[3] = 1'b1; // software event 3
+                    5'd4:  core_irq_fastx[4] = 1'b1; // software event 4
+                    5'd5:  core_irq_fastx[5] = 1'b1; // software event 5
+                    5'd6:  core_irq_fastx[6] = 1'b1; // software event 6
+                    5'd7:  core_irq_fastx[7] = 1'b1; // software event 7
+                    5'd8:  core_irq_fastx[8] = 1'b1; // dma_pe_evt
+                    5'd9:  core_irq_fastx[9] = 1'b1; // dma_pe_irq
+                    5'd12: core_irq_fastx[12] = 1'b1; // pf_evt
+                    default : core_irq_fastx = 32'b0;
+                endcase
+            end
+        end
+
+        always_comb begin : gen_core_irq_ack_id
+            case (core_irq_ack_id_RI5CY)
+                5'd16: core_irq_ack_id = 10; // irq fast 0  / fastx 16
+                5'd17: core_irq_ack_id = 11; // irq fast 1  / fastx 17
+                5'd18: core_irq_ack_id = 14; // irq fast 2  / fastx 18
+                5'd19: core_irq_ack_id = 15; // irq fast 3  / fastx 19
+                5'd20: core_irq_ack_id = 17; // irq fast 4  / fastx 20
+                5'd21: core_irq_ack_id = 18; // irq fast 5  / fastx 21
+                5'd22: core_irq_ack_id = 19; // irq fast 6  / fastx 22
+                5'd23: core_irq_ack_id = 20; // irq fast 7  / fastx 23
+                5'd26: core_irq_ack_id = 26; // irq fast 10 / fastx 26
+                5'd27: core_irq_ack_id = 29; // irq fast 11 / fastx 27
+                5'd28: core_irq_ack_id = 30; // irq fast 12 / fastx 28
+                5'd29: core_irq_ack_id = 31; // irq fast 13 / fastx 29
+                // irq x specific events
+                5'd0:  core_irq_ack_id = 0; // core_irq_fastx 0 
+                5'd1:  core_irq_ack_id = 1; // core_irq_fastx 1 
+                5'd2:  core_irq_ack_id = 2; // core_irq_fastx 2 
+                5'd3:  core_irq_ack_id = 3; // core_irq_fastx 3 
+                5'd4:  core_irq_ack_id = 4; // core_irq_fastx 4 
+                5'd5:  core_irq_ack_id = 5; // core_irq_fastx 5 
+                5'd6:  core_irq_ack_id = 6; // core_irq_fastx 6 
+                5'd7:  core_irq_ack_id = 7; // core_irq_fastx 7 
+                5'd8:  core_irq_ack_id = 8; // core_irq_fastx 8 
+                5'd9:  core_irq_ack_id = 9; // core_irq_fastx 9 
+                5'd12: core_irq_ack_id = 12; // core_irq_fastx 12
+                default : core_irq_ack_id = 0;
+            endcase
         end
     end
 
-    // remap ack ID for SoC Event FIFO
-    always_comb begin : gen_core_irq_ack_id
-        if (irq_ack_id == 10) begin
-            core_irq_ack_id = 26;
-        end else begin
-            core_irq_ack_id = {1'b0, irq_ack_id};
-        end
-    end
-
-    end
     endgenerate
 
     apb_interrupt_cntrl #(.PER_ID_WIDTH(PER_ID_WIDTH)) fc_eu_i (
@@ -381,3 +472,4 @@ module fc_subsystem #(
     endgenerate
 
 endmodule
+
