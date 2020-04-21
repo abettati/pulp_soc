@@ -402,19 +402,8 @@ module fc_subsystem #(
                 5'd27: core_irq_ack_id = 29; // irq fast 11 / fastx 27
                 5'd28: core_irq_ack_id = 30; // irq fast 12 / fastx 28
                 5'd29: core_irq_ack_id = 31; // irq fast 13 / fastx 29
-                // irq x specific events
-                5'd0:  core_irq_ack_id = 0; // core_irq_fastx 0 
-                5'd1:  core_irq_ack_id = 1; // core_irq_fastx 1 
-                5'd2:  core_irq_ack_id = 2; // core_irq_fastx 2 
-                5'd3:  core_irq_ack_id = 3; // core_irq_fastx 3 
-                5'd4:  core_irq_ack_id = 4; // core_irq_fastx 4 
-                5'd5:  core_irq_ack_id = 5; // core_irq_fastx 5 
-                5'd6:  core_irq_ack_id = 6; // core_irq_fastx 6 
-                5'd7:  core_irq_ack_id = 7; // core_irq_fastx 7 
-                5'd8:  core_irq_ack_id = 8; // core_irq_fastx 8 
-                5'd9:  core_irq_ack_id = 9; // core_irq_fastx 9 
-                5'd12: core_irq_ack_id = 12; // core_irq_fastx 12
-                default : core_irq_ack_id = 0;
+                // no remap needed for irq x specific events
+                default : core_irq_ack_id = core_irq_ack_id_RI5CY;
             endcase
         end
     end
