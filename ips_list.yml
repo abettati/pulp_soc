@@ -52,8 +52,8 @@ fpnew:
   commit: v0.6.1
 jtag_pulp:
   commit: v0.1
-riscv:
-  commit: master
+cv32e40p:
+  commit: CLINTXpulp
   group: abettati
 ibex:
   commit: 13313952cd50ff04489f6cf3dba9ba05c2011a8b
